@@ -64,4 +64,17 @@ public class Place {
     @Column(name = "owner_id")
     private Long ownerId;
 
+    @Column(name = "is_approved")
+    private boolean approved;
+
+    @Column(name = "is_rejected")
+    private boolean rejected;
+    public void incrementFreePlaces() {
+        countFreePlaces++;
+    }
+
+    public void decrementFreePlaces() {
+        countFreePlaces--;
+    }
+
 }

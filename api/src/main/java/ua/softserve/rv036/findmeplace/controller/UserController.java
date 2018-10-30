@@ -3,18 +3,27 @@ package ua.softserve.rv036.findmeplace.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RestController;
-import ua.softserve.rv036.findmeplace.model.Place;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import ua.softserve.rv036.findmeplace.model.Place;
+import ua.softserve.rv036.findmeplace.model.Place_Manager;
 import ua.softserve.rv036.findmeplace.model.User;
-import ua.softserve.rv036.findmeplace.payload.ApiResponse;
-import ua.softserve.rv036.findmeplace.payload.UpdateProfileRequest;
+import ua.softserve.rv036.findmeplace.model.enums.Role;
+import ua.softserve.rv036.findmeplace.payload.*;
+import ua.softserve.rv036.findmeplace.repository.FeedbackRepository;
 import ua.softserve.rv036.findmeplace.repository.PlaceRepository;
+import ua.softserve.rv036.findmeplace.repository.Place_ManagerRepository;
 import ua.softserve.rv036.findmeplace.repository.UserRepository;
+import ua.softserve.rv036.findmeplace.security.CurrentUser;
+import ua.softserve.rv036.findmeplace.security.UserPrincipal;
+import ua.softserve.rv036.findmeplace.service.FileStorageService;
+import ua.softserve.rv036.findmeplace.service.MailSender;
+import ua.softserve.rv036.findmeplace.service.Place_ManagerService;
+import ua.softserve.rv036.findmeplace.service.UserService;
+
+import javax.annotation.security.RolesAllowed;
 import javax.validation.Valid;
 import java.util.List;
 import java.util.Optional;
@@ -26,10 +35,46 @@ public class UserController {
     private UserRepository userRepository;
 
     @Autowired
+    private UserService userService;
+
+    @Autowired
+    private Place_ManagerService placeManagerService;
+
+    @Autowired
     private PlaceRepository placeRepository;
 
     @Autowired
+    private Place_ManagerRepository placeManagerRepository;
+
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private FileStorageService fileStorageService;
+
+    @Autowired
+    private MailSender mailSender;
+
+    @GetMapping("/user/me")
+    @RolesAllowed({"ROLE_USER", "ROLE_MANAGER", "ROLE_OWNER", "ROLE_ADMIN"})
+    public UserSummary getCurrentUser(@CurrentUser UserPrincipal currentUser) {
+        UserSummary userSummary = new UserSummary(currentUser.getId(), currentUser.getUsername(), currentUser.getAuthority().getAuthority());
+        userSummary.setFirstName(currentUser.getFirstName());
+        userSummary.setLastName(currentUser.getLastName());
+        userSummary.setEmail(currentUser.getEmail());
+        userSummary.setPhone(currentUser.getPhone());
+        return userSummary;
+    }
+
+//    @GetMapping("/user/me")
+//    @RolesAllowed({"ROLE_USER", "ROLE_MANAGER", "ROLE_OWNER", "ROLE_ADMIN"})
+//    public UserSummary getCurrentUser(@CurrentUser UserPrincipal currentUser) {
+//        UserSummary userSummary = new UserSummary(currentUser.getId(), currentUser.getUsername(), currentUser.getAuthority().getAuthority());
+//        return userSummary;
+//    }
 
     @GetMapping("/users")
     List<User> getAll() {
@@ -46,9 +91,62 @@ public class UserController {
         return placeRepository.findAllByOwnerId(id);
     }
 
+    @GetMapping("/manager/{managerId}/places-by-owner/{ownerId}")
+    public List<Place_Manager> getManagerPlaces(@PathVariable("managerId") Long managerId, @PathVariable Long ownerId) {
+
+        return placeManagerService.getAllPlacesByManagerAndOwner(managerId, ownerId);
+    }
+
+    @GetMapping("/user/{id}/managers")
+    public List<User> getUserManagers(@PathVariable Long id) {
+        return userService.getAllManagersByOwnerRole(id);
+    }
+
+    @PostMapping("/user/{ownerId}/delete-manager/{managerId}")
+    ResponseEntity deleteManagers(@PathVariable Long ownerId, @PathVariable Long managerId){
+
+        List<Place_Manager> allByUserId = placeManagerService.getAllPlacesByManagerAndOwner(managerId, ownerId);
+
+        placeManagerRepository.deleteAll(allByUserId);
+
+        List<User> result = userService.getAllManagersByOwnerRole(ownerId);
+
+        return new ResponseEntity(result, HttpStatus.OK);
+    }
+
     @GetMapping("/users/nick/{nickname}")
     Optional<User> getUserByNickName(@PathVariable String nickname) {
         return userRepository.findByNickName(nickname);
+    }
+
+    @PostMapping("/set-avatar")
+    @RolesAllowed({"ROLE_USER", "ROLE_OWNER", "ROLE_MANAGER", "ROLE_ADMIN"})
+    public ResponseEntity uploadAvatar(@RequestParam("file") MultipartFile file) {
+
+        UserPrincipal userPrincipal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        Optional<User> optional = userRepository.findById(userPrincipal.getId());
+        User user = optional.get();
+
+        if(FileStorageService.isImage(file)) {
+            String link = fileStorageService.storeFile(file, "users/" + user.getId());
+            user.setAvatarUrl(link);
+            userRepository.save(user);
+            return new ResponseEntity(new ApiResponse(true, "Avatar changed"), HttpStatus.OK);
+        }
+
+        return new ResponseEntity(new ApiResponse(false, "Avatar not changed"), HttpStatus.BAD_REQUEST);
+    }
+
+    @GetMapping("get-avatar")
+    @RolesAllowed({"ROLE_USER", "ROLE_OWNER", "ROLE_MANAGER", "ROLE_ADMIN"})
+    public Optional<String> getAvatar() {
+        UserPrincipal userPrincipal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        Optional<User> optional = userRepository.findById(userPrincipal.getId());
+        User user = optional.get();
+
+        return Optional.ofNullable(user.getAvatarUrl());
     }
 
     @PostMapping("/users/update")
@@ -99,9 +197,62 @@ public class UserController {
     }
 
     @DeleteMapping("/user/delete-place/{id}")
-    public ResponseEntity<Void> deleteUserPlaceById(@PathVariable("id") Long id) {
+    public ResponseEntity deleteUserPlaceById(@PathVariable("id") Long id) {
         placeRepository.deleteById(id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    @DeleteMapping("/user/delete-feedback/{id}")
+    public ResponseEntity deleteUserFeedbackById(@PathVariable("id") Long id) {
+        feedbackRepository.deleteById(id);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PostMapping("/user/update-profile")
+    ResponseEntity updateUserProfile(@RequestBody UpdateProfileRequest updateProfileRequest) {
+        return userService.updateUserProfile(updateProfileRequest);
+    }
+
+    @PostMapping("/user/update-password")
+    ResponseEntity updateUserPassword(@RequestBody UpdateProfileRequest updateProfileRequest) {
+       return userService.updateUserPassword(updateProfileRequest);
+    }
+
+    @DeleteMapping("/user/delete/{id}")
+    public ResponseEntity deleteUser(@PathVariable("id") Long id) {
+        userRepository.deleteById(id);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PostMapping("/email/to-user")
+    @RolesAllowed("ROLE_ADMIN")
+    public ResponseEntity emailToUser(@Valid @RequestBody EmailToUserRequest emailToUserRequest) {
+        Optional<User> userOptional = userRepository.findById(emailToUserRequest.getUserId());
+
+        if(!userOptional.isPresent()) {
+            ApiResponse apiResponse = new ApiResponse(false, "User does not exist");
+            return new ResponseEntity<>(apiResponse, HttpStatus.BAD_REQUEST);
+        }
+
+        User user = userOptional.get();
+        String email = user.getEmail();
+        String subject = emailToUserRequest.getSubject();
+        String message = emailToUserRequest.getMessage();
+        mailSender.send(email, subject, message);
+
+        return new ResponseEntity<>(new ApiResponse(true, "Email has been sent"), HttpStatus.OK);
+    }
+
+    @PostMapping("/email/to-admin")
+    public ResponseEntity emailToAdmin(@Valid @RequestBody EmailToAdminRequest emailToAdminRequest) {
+        String from = emailToAdminRequest.getUserEmail();
+        String subject = emailToAdminRequest.getSubject();
+        String message = emailToAdminRequest.getMessage();
+
+        List<User> admins = userRepository.findAllByRole(Role.ROLE_ADMIN);
+
+        admins.forEach(admin -> mailSender.sendWithUserEmail(from, admin.getEmail(), subject, message));
+
+        return new ResponseEntity<>(new ApiResponse(true, "Email has been sent"), HttpStatus.OK);
+    }
 }

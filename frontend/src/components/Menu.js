@@ -1,10 +1,10 @@
-import React, { Component } from 'react';
-import { Navbar, NavItem, Button, Icon} from 'react-materialize';
-import { withRouter } from 'react-router-dom';
-import Logout from './Logout';
+import React, {Component} from 'react';
+import {Button, Icon, Navbar, NavItem} from 'react-materialize';
+import {withRouter} from 'react-router-dom';
+import Logout from './authorization/Logout';
 import '../styles/Menu.css';
 import "../styles/Logout.css";
-import {LOGIN_CHANGED, PAGE_CHANGED, Session} from "../utils";
+import {PAGE_CHANGED} from "../utils";
 
 class Menu extends Component {
 
@@ -15,16 +15,13 @@ class Menu extends Component {
             style: "menu-container"
         };
 
-        window.addEventListener(LOGIN_CHANGED, this.onLoginChangedHandler.bind(this));
+        //window.addEventListener(LOGIN_CHANGED, this.onLoginChangedHandler.bind(this));
         window.addEventListener(PAGE_CHANGED, this.onPageChangedHandler.bind(this));
     }
 
-    onLogoutHandler() {
-        Session.logout();
-    }
 
     render() {
-        const isLoggedIn = Session.isLoggedIn();
+        const isLoggedIn = this.props.isAuthenticated;
 
         return (
             <div className={this.state.style}>
@@ -33,7 +30,12 @@ class Menu extends Component {
                         <NavItem href='#/'>Home</NavItem>
                         <NavItem href='#/map'>Map</NavItem>
                         <NavItem href='#place/1'>Place</NavItem>
-                        <Logout isLoggedIn={isLoggedIn} logout={this.onLogoutHandler.bind(this)}/>
+                        <Logout
+                            currentUser={this.props.currentUser}
+                            isLoggedIn={isLoggedIn}
+                            handleLogout={this.props.handleLogout}
+                            userAvatar={this.props.userAvatar}
+                        />
                         <NavItem href='#/sign-up' id="auth-sign-up" className={isLoggedIn ? "hidden" : ""}>
                             <Button waves="light">
                                 Sign Up
@@ -51,17 +53,10 @@ class Menu extends Component {
     }
 
     componentWillUnmount() {
-        window.removeEventListener(LOGIN_CHANGED, this.onLoginChangedHandler.bind(this));
+        //window.removeEventListener(LOGIN_CHANGED, this.onLoginChangedHandler.bind(this));
         window.removeEventListener(PAGE_CHANGED, this.onPageChangedHandler.bind(this));
     }
 
-    onLoginChangedHandler() {
-        this.forceUpdate();
-
-        if (Session.isLoggedIn()) {
-            this.props.history.push('/');
-        }
-    }
 
     onPageChangedHandler(e) {
         const detail = e.detail;
@@ -74,4 +69,4 @@ class Menu extends Component {
 
 }
 
-export default withRouter(Menu);
+export default Menu;

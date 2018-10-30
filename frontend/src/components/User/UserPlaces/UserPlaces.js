@@ -1,9 +1,11 @@
 import React, {Component} from 'react';
-import {Col, Row} from "react-materialize";
-import {deleteUserPlace} from "../../../util/APIUtils";
+import {deleteUserPlace, getAllMyPlaces} from "../../../util/APIUtils";
+import {Row} from "react-materialize";
 import Place from "./Place";
-import {Link} from "react-router-dom";
-import SearchPlace from "../../Map/SearchPlace";
+import {Session} from "../../../utils";
+import {Link, Redirect} from 'react-router-dom';
+import PlacesFilter from "../../Admin/Places/Filter/PlacesFilter";
+import '../../Admin/Places/Places.css';
 
 class UserPlaces extends Component {
 
@@ -11,21 +13,23 @@ class UserPlaces extends Component {
         super(props);
         this.state = {
             places: [],
-            searchValue:''
+            filteredPlaces: []
         };
 
         this.handleDelete = this.handleDelete.bind(this);
+        this.renderRedirect = this.renderRedirect.bind(this);
     }
 
     componentDidMount() {
-        fetch("/user/" + this.props.match.params.id + "/places")
-            .then((response) => response.json())
-            .then((result) => {
+        getAllMyPlaces()
+            .then((response) => {
+                console.log(response);
                 this.setState({
-                    places: result
+                    places: response,
+                    filteredPlaces: response,
                 });
             })
-    }
+    };
 
     handleDelete(id) {
         deleteUserPlace(id)
@@ -35,24 +39,60 @@ class UserPlaces extends Component {
                 });
 
                 this.setState({
-                    places: places
+                    places: places,
+                    filteredPlaces: places
                 });
 
                 window["Materialize"].toast("Place deleted", 3000);
             }).catch((error) => {
                 console.error('error', error);
             });
-    }
+    };
+
+    renderRedirect = () => {
+        if (!Session.isLoggedIn()) {
+            return <Redirect to='/'/>
+        }
+    };
+
+    handleUpdate = (places) => {
+        this.setState({
+            filteredPlaces: places
+        });
+    };
+
+    renderTop = () => {
+        if(this.state.places.length === 0) {
+            return(
+                <Row>
+                    <h3>You are not the owner. To become an owner, register at least one place.</h3>
+                </Row>
+            )
+        } else {
+            return(
+                <React.Fragment>
+                    <Row className="title">
+                        <h5>Places</h5>
+                    </Row>
+                    <Row className="places-filter">
+                        <PlacesFilter   places={this.state.places}
+                                        filteredPlaces={this.state.filteredPlaces}
+                                        handleUpdate={this.handleUpdate}
+                        />
+                    </Row>
+                </React.Fragment>
+            )
+        }
+    };
 
     render() {
-        const places = this.state.places;
+        const places = this.state.filteredPlaces;
 
         return(
-            <Row className="user-places-wrapper">
+            <Row className="user-places-wrapper places-wrapper">
+                {this.renderRedirect()}
+                {this.renderTop()}
                 <Row className="places-search">
-                    <Col s={3}>
-                        <SearchPlace />
-                    </Col>
                     <Link to={`/register-place`} id="register-place">Add place</Link>
                 </Row>
                 <Row className="places-container">
@@ -65,6 +105,9 @@ class UserPlaces extends Component {
                                        description={item.description}
                                        rating={item.rating}
                                        countFreePlaces={item.countFreePlaces}
+                                       isApprove={item.approved}
+                                       isRejected={item.rejected}
+                                       ownerId={item.ownerId}
                                        handleDelete={this.handleDelete}
                                 />
                             )
@@ -73,7 +116,7 @@ class UserPlaces extends Component {
                 </Row>
             </Row>
         );
-    }
+    };
 
 }
 

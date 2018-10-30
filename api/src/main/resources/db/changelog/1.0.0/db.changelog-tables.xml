@@ -13,31 +13,31 @@
             </column>
 
             <column name="first_name" type="varchar(255)">
-                <constraints nullable = "true"/>
+                <constraints nullable="true"/>
             </column>
 
             <column name="last_name" type="varchar(255)">
-                <constraints nullable = "true"/>
+                <constraints nullable="true"/>
             </column>
 
             <column name="phone" type="varchar(255)">
-                <constraints nullable = "true"/>
+                <constraints nullable="true"/>
             </column>
 
             <column name="email" type="varchar(255)">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="nick_name" type="varchar(255)">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="password" type="varchar(255)">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="role" type="varchar(255)">
-                <constraints nullable="true" />
+                <constraints nullable="true"/>
             </column>
 
             <column name="ban_status" type="varchar(255)">
@@ -59,9 +59,13 @@
             <column name="activation_code" type="varchar(255)">
                 <constraints nullable="true"/>
             </column>
+
+            <column name="avatar_url" type="varchar(255)">
+                <constraints nullable="true"/>
+            </column>
         </createTable>
-            <addUniqueConstraint columnNames="email, nick_name" constraintName="user_unique"
-                              tableName="users"/>
+        <addUniqueConstraint columnNames="email, nick_name" constraintName="user_unique"
+                             tableName="users"/>
     </changeSet>
 
     <!-- Places -->
@@ -72,35 +76,35 @@
             </column>
 
             <column name="name" type="varchar(255)">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="address" type="varchar(255)">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="rating" type="decimal">
-                <constraints nullable = "true"/>
+                <constraints nullable="true"/>
             </column>
 
             <column name="description" type="varchar(255)">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="latitude" type="decimal">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="longitude" type="decimal">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="open" type="time">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="close" type="time">
-                <constraints nullable = "false"/>
+                <constraints nullable="false"/>
             </column>
 
             <column name="count_free_places" type="int">
@@ -114,6 +118,14 @@
             <column name="owner_id" type="int">
                 <constraints nullable="true" foreignKeyName="fk_owner_id" references="users(id)"/>
             </column>
+
+            <column name="is_approved" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="is_rejected" type="boolean">
+                <constraints nullable="false"/>
+            </column>
         </createTable>
     </changeSet>
 
@@ -124,12 +136,12 @@
                 <constraints primaryKey="true" nullable="false"/>
             </column>
 
-            <column name="comment" type="varchar(255)">
-                <constraints nullable = "false"/>
+            <column name="comment" type="varchar">
+                <constraints nullable="false"/>
             </column>
 
-            <column name="mark" type="int">
-                <constraints nullable = "false"/>
+            <column name="creation_date" type="timestamp">
+                <constraints nullable="true"/>
             </column>
 
             <column name="user_id" type="int">
@@ -141,6 +153,90 @@
                 <constraints nullable="false" foreignKeyName="fk_place_id" references="places(id)"
                              deleteCascade="true"/>
             </column>
+        </createTable>
+    </changeSet>
+
+    <!-- Marks -->
+    <changeSet id="4" author="rv036">
+        <createTable tableName="mark">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="mark" type="int">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="user_id" type="int">
+                <constraints nullable="false" foreignKeyName="fk_owner_id" references="users(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="place_id" type="int">
+                <constraints nullable="false" foreignKeyName="fk_place_id" references="places(id)"
+                             deleteCascade="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <!-- PlaceRejects -->
+    <changeSet id="5" author="rv036">
+        <createTable tableName="place_rejects">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="reject_message" type="varchar(255)">
+                <constraints nullable = "false"/>
+            </column>
+
+            <column name="place_id" type="int">
+                <constraints nullable="false" foreignKeyName="fk_place_id" references="places(id)"
+                             deleteCascade="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <!--bookings-->
+    <changeSet id="6" author="rv036">
+        <createTable tableName="booking">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="user_id" type="int">
+                <constraints nullable="false" foreignKeyName="fk_owner_id" references="users(id)" deleteCascade="true"/>
+            </column>
+
+            <column name="place_id" type="int">
+                <constraints nullable="false" foreignKeyName="fk_place_id" references="places(id)" deleteCascade="true"/>
+            </column>
+
+            <column name="booking_time" type="varchar(255)">
+                <constraints nullable = "false"/>
+            </column>
+
+            <column name="status" type="int">
+                <constraints nullable = "false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <!--PlaceImages-->
+    <changeSet id="7" author="rv036">
+        <createTable tableName="place_images">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="place_id" type="int">
+                <constraints nullable="false" foreignKeyName="fk_place_id" references="places(id)"
+                             deleteCascade="true"/>
+            </column>
+
+            <column name="image_url" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+
         </createTable>
     </changeSet>
 </databaseChangeLog>

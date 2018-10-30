@@ -1,16 +1,37 @@
-import React, { Component } from 'react';
-import { Row } from 'react-materialize';
+import React, {Component} from 'react';
+import {Row} from 'react-materialize';
 import '../../styles/PlacePage.css';
 import ButtonsBlock from './ButtonsBlock.js';
 import ReviewsBlock from './ReviewsBlock.js';
+import ManagersBlock from './ManagersBlock.js';
 import Info from './Info.js';
-import { PAGE_CHANGED } from "../../utils";
+import {addFavorite, changeCountFreePlaces} from "../../util/APIUtils";
+import {checkBookingTime, PAGE_CHANGED, Session} from "../../utils";
+import {bookPlace} from "../../util/APIUtils";
+import StarRatings from "react-star-ratings";
+import {addMark} from '../../util/APIUtils';
+import Gallery from "react-grid-gallery";
+
+const toast = window["Materialize"].toast;
+
 
 class PlacePage extends Component {
 
     constructor(props) {
         super(props);
-        this.state = { place: {} } ;
+
+        this.changeRating = this.changeRating.bind(this);
+        this.state = {
+            place: {},
+            picturesFromServer: [],
+            rating: 0,
+            viewManager: Session.isOwner(),
+        };
+
+        // this.state = {
+        //     place: {},
+        //     viewManager: Session.isOwner()
+        // };
     }
 
     componentWillMount() {
@@ -28,11 +49,102 @@ class PlacePage extends Component {
             .then(
                 (result) => {
                     this.setState({
-                        place: result
+                        place: result,
+                        rating: result.rating
                     });
                 }
-            )
+            );
+
+        this.downloadImages();
     }
+
+    downloadImages = () => {
+        fetch("/places/download-images/" + this.props.match.params.placeId)
+            .then(res => res.json())
+            .then(
+                (pictures) => {
+
+                    const picturesFromServer = [];
+                    pictures.map((image) => {
+                        picturesFromServer.push({
+                            imageUrl: image.imageUrl,
+                            src: image.imageUrl,
+                            thumbnail: image.imageUrl,
+                            thumbnailWidth: 500,
+                            thumbnailHeight: 350,
+                        })
+                    });
+
+                    this.setState({
+                        picturesFromServer: picturesFromServer,
+                    });
+                }
+            );
+    };
+
+    changeRating(newRating) {
+        const markRequest = {
+            mark: newRating,
+            userId: this.props.currentUser.id,
+            placeId: this.state.place.id
+        };
+
+        addMark(markRequest)
+            .then(response => {
+                this.setState({
+                    rating: response,
+                });
+            }).catch(error => {
+            if (error.status === 401) {
+                this.props.handleLogout();
+                window.Materialize.toast('You are not logged in!', 1000);
+            } else {
+                window.Materialize.toast('Sorry! Something went wrong. Please try again!', 1000);
+            }
+        });
+
+
+    }
+
+    viewManagers() {
+        if (this.state.viewManager && (Session.userId() == this.state.place.ownerId)) {
+            return (
+                <ManagersBlock
+                    placeId={this.props.match.params.placeId}
+                />
+            )
+        }
+    }
+
+    countChange = (count) => {
+        changeCountFreePlaces(this.props.match.params.placeId, count)
+            .then((result) => {
+                this.setState({
+                    place: result
+                });
+            }).catch((error) => {
+            console.error('error', error);
+        });
+    };
+
+    renderGallery = () => {
+
+        if(this.state.picturesFromServer.length > 0) {
+            return(
+                <div>
+                    <Row>
+                        <h1>Gallery</h1>
+                    </Row>
+                    <Row className="gallery-container">
+                        <Gallery
+                            images={this.state.picturesFromServer}
+                            enableImageSelection={false}
+                            preloadNextImage={false}/>
+                    </Row>
+                </div>
+            );
+        }
+    };
 
     render() {
 
@@ -43,14 +155,38 @@ class PlacePage extends Component {
                 <Row className="place-header">
                     <h2>{place.name}</h2>
                     <h2>{place.address}</h2>
+                    <StarRatings
+                        rating={this.state.rating}
+                        starRatedColor="#ff8d15"
+                        starHoverColor="yellow"
+                        starDimension="40px"
+                        starSpacing="10px"
+                    />
+
                 </Row>
+
+
                 <div className="container content-container">
-                    <ButtonsBlock/>
+                    <ButtonsBlock onBookCompleteHandler={this.onBookCompleteHandler.bind(this)}
+                                  addToFavorite={this.addToFavorite.bind(this)}
+                                  placeId={place.id}
+                                  rating={this.state.rating}
+                                  changeRating={this.changeRating}
+                                  isAuthenticated={this.props.isAuthenticated}
+                    />
                     <Info openTime={place.open}
                           closeTime={place.close}
+                          placeId={this.props.match.params.placeId}
                           freePlaces={place.countFreePlaces}
-                          description={place.description}/>
-                    <ReviewsBlock placeId={this.props.match.params.placeId}/>
+                          description={place.description}
+                          placeImage={this.state.picturesFromServer[0]}
+                          countChange={this.countChange}/>
+                    {this.renderGallery()}
+                    <ReviewsBlock placeId={this.props.match.params.placeId}
+                                  currentUser={this.props.currentUser}
+                                  isAuthenticated={this.props.isAuthenticated}
+                    />
+                    {this.viewManagers()}
                 </div>
             </div>
         );
@@ -58,11 +194,37 @@ class PlacePage extends Component {
 
     componentWillUnmount() {
         window.dispatchEvent(new CustomEvent(PAGE_CHANGED, {
+
             detail: {
                 show: false,
                 name: "place-page"
             }
         }));
+    }
+
+    addToFavorite() {
+        addFavorite(this.state.place.id).then(response => {
+            toast(response.message, 3000);
+        }).catch(error => {
+            toast(error.message, 3000);
+        });
+    }
+
+    onBookCompleteHandler(time) {
+        const result = checkBookingTime(time, this.state.place);
+
+        if (result.success) {
+            bookPlace({
+                placeId: this.state.place.id,
+                bookingTime: time
+            }).then((response) => {
+                console.log(response);
+            });
+            return;
+        }
+
+        toast(`You can book this place from ${result.open} to ${result.close}`, 3000);
+
     }
 }
 
